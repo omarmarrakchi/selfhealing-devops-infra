@@ -1,0 +1,48 @@
+---
+- name: Initialiser le cluster Kubernetes
+  hosts: master
+  become: true
+
+  tasks:
+
+    - name: Verifier si le cluster existe deja
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: k8s_installed
+
+    - name: Initialiser le cluster
+      shell: |
+        kubeadm init \
+          --pod-network-cidr=192.168.0.0/16 \
+          --apiserver-advertise-address={{ ansible_host }}
+      when: not k8s_installed.stat.exists
+
+    - name: Creer le dossier .kube
+      file:
+        path: /home/omar/.kube
+        state: directory
+        owner: omar
+        group: omar
+
+    - name: Copier la config kubectl
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/omar/.kube/config
+        remote_src: true
+        owner: omar
+        group: omar
+
+    - name: Installer Calico CNI
+      become: false
+      shell: kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+      environment:
+        KUBECONFIG: /home/omar/.kube/config
+      tags: calico
+
+    - name: Generer la commande join
+      shell: kubeadm token create --print-join-command
+      register: join_command
+
+    - name: Afficher la commande join
+      debug:
+        msg: "{{ join_command.stdout }}"
