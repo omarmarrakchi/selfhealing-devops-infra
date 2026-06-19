@@ -4,7 +4,6 @@
   become: true
 
   tasks:
-
     # ── Prerequis systeme ──────────────────────────────
     - name: Desactiver le swap
       shell: swapoff -a
@@ -12,7 +11,7 @@
     - name: Supprimer le swap du fstab
       lineinfile:
         path: /etc/fstab
-        regexp: '.*swap.*'
+        regexp: ".*swap.*"
         state: absent
 
     - name: Charger les modules noyau requis
@@ -31,10 +30,38 @@
           net.bridge.bridge-nf-call-iptables  = 1
           net.bridge.bridge-nf-call-ip6tables = 1
           net.ipv4.ip_forward                 = 1
+          net.ipv4.conf.all.accept_redirects  = 0
+          net.ipv4.conf.all.send_redirects    = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv4.conf.default.send_redirects   = 0
         dest: /etc/sysctl.d/k8s.conf
 
     - name: Appliquer sysctl
       shell: sysctl --system
+
+    # ── DNS stable (evite stub resolver casse) ─────────
+    - name: Desactiver le stub listener systemd-resolved
+      lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: "^#?DNSStubListener="
+        line: "DNSStubListener=no"
+
+    - name: Redemarrer systemd-resolved
+      service:
+        name: systemd-resolved
+        state: restarted
+
+    - name: Supprimer le lien symbolique resolv.conf existant
+      file:
+        path: /etc/resolv.conf
+        state: absent
+
+    - name: Forcer un resolv.conf statique fiable
+      copy:
+        content: |
+          nameserver 192.168.198.2
+          nameserver 8.8.8.8
+        dest: /etc/resolv.conf
 
     # ── Installer VMware Tools ─────────────────────────
     - name: Installer open-vm-tools
@@ -66,8 +93,8 @@
     - name: Activer SystemdCgroup dans containerd
       replace:
         path: /etc/containerd/config.toml
-        regexp: 'SystemdCgroup = false'
-        replace: 'SystemdCgroup = true'
+        regexp: "SystemdCgroup = false"
+        replace: "SystemdCgroup = true"
 
     - name: Redemarrer containerd
       service:
