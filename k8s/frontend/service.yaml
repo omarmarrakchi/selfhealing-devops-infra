@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: devops-task-manager
+  labels:
+    app: frontend
+spec:
+  type: NodePort                # accessible depuis l'exterieur du cluster
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30000           # accessible sur http://<IP_NOEUD>:30000
+      protocol: TCP

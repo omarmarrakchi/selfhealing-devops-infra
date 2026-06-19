@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: devops-task-manager
+data:
+  # PostgreSQL
+  POSTGRES_SCHEMA_TASKS: "tasks_db"
+  POSTGRES_SCHEMA_USERS: "users_db"
+
+  # Services URLs (internes au cluster)
+  TASK_SERVICE_URL:  "http://task-service:8000"
+  USER_SERVICE_URL:  "http://user-service:8001"
+  POSTGRES_HOST:     "postgres"
+  POSTGRES_PORT:     "5432"

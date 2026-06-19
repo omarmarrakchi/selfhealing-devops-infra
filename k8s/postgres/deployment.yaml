@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: devops-task-manager
+  labels:
+    app: postgres
+spec:
+  replicas: 1                   # PostgreSQL = 1 seul replica (base de donnees stateful)
+  selector:
+    matchLabels:
+      app: postgres
+  strategy:
+    type: Recreate              # arrete l'ancien pod avant de demarrer le nouveau (DB stateful)
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      restartPolicy: Always     # redemarre toujours si le pod crashe
+
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 5432
+
+          # Variables depuis le Secret
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+
+          # Liveness Probe : verifier que PostgreSQL repond
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - taskadmin
+                - -d
+                - taskmanager
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness Probe : verifier que PostgreSQL est pret a accepter des connexions
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - taskadmin
+                - -d
+                - taskmanager
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # Limites de ressources
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # Volume pour persister les donnees
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc

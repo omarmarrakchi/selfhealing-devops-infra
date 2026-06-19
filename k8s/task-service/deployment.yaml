@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-service
+  namespace: devops-task-manager
+  labels:
+    app: task-service
+spec:
+  replicas: 2                   # 2 instances pour la haute disponibilite
+
+  selector:
+    matchLabels:
+      app: task-service
+
+  # Rolling Update : mise a jour sans interruption de service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1         # max 1 pod indisponible pendant la mise a jour
+      maxSurge: 1               # max 1 pod supplementaire pendant la mise a jour
+
+  template:
+    metadata:
+      labels:
+        app: task-service
+    spec:
+      restartPolicy: Always
+
+      containers:
+        - name: task-service
+          image: omarmarrakchi/task-manager-task-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: DATABASE_URL
+            - name: POSTGRES_SCHEMA
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: POSTGRES_SCHEMA_TASKS
+
+          # Liveness Probe : si /health echoue -> K8s redémarre le pod (self-healing)
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15   # attendre 15s avant le premier test
+            periodSeconds: 30         # tester toutes les 30s
+            timeoutSeconds: 5
+            failureThreshold: 3       # 3 echecs consecutifs = redemarrage
+
+          # Readiness Probe : si /health echoue -> K8s retire le pod du trafic
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # Limites de ressources (necessaires pour le HPA)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
